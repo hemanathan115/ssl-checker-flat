@@ -1,1 +1,262 @@
-hi
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSL Certificate Checker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #060c14; --surface: #0d1826; --surface2: #111f30;
+      --border: #1e3a5f; --accent: #0ea5e9; --accent2: #38bdf8;
+      --text: #e2eaf4; --muted: #64748b;
+      --green: #22c55e; --yellow: #f59e0b; --red: #ef4444;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; }
+    .bg-grid {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: linear-gradient(rgba(14,165,233,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(14,165,233,.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .app { min-height: 100vh; display: flex; flex-direction: column; }
+    header {
+      text-align: center; padding: 3.5rem 1rem 2rem;
+      position: relative; z-index: 1;
+    }
+    .logo { display: flex; align-items: center; justify-content: center; gap: .5rem; margin-bottom: .5rem; }
+    .logo-icon { font-size: 2rem; }
+    .logo-text { font-size: 2.4rem; font-weight: 800; letter-spacing: -.03em; color: #fff; }
+    .logo-accent { color: var(--accent); }
+    .tagline { color: var(--muted); font-size: 1rem; font-family: 'JetBrains Mono', monospace; }
+    main { flex: 1; width: 100%; max-width: 860px; margin: 0 auto; padding: 0 1.5rem 4rem; position: relative; z-index: 1; }
+    .search-form { display: flex; gap: .75rem; margin-bottom: 2rem; }
+    .input-wrap {
+      flex: 1; display: flex; align-items: center;
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 12px; overflow: hidden; transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14,165,233,.12); }
+    .input-prefix {
+      padding: 0 .75rem; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+      font-size: .9rem; border-right: 1px solid var(--border);
+      background: var(--surface2); white-space: nowrap;
+      display: flex; align-items: center; height: 100%;
+    }
+    .url-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem; padding: .9rem 1rem;
+    }
+    .url-input::placeholder { color: var(--muted); }
+    .check-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 12px;
+      padding: 0 2rem; font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: background .2s, transform .1s;
+      display: flex; align-items: center; justify-content: center;
+      min-width: 110px; gap: .5rem;
+    }
+    .check-btn:hover:not(:disabled) { background: var(--accent2); transform: translateY(-1px); }
+    .check-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin .7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-card {
+      background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+      border-radius: 10px; padding: 1rem 1.25rem; color: var(--red);
+      font-family: 'JetBrains Mono', monospace; font-size: .9rem;
+    }
+    .results { animation: fadeUp .4s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .result-top {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 16px; padding: 1.5rem 2rem; margin-bottom: 1.25rem;
+      flex-wrap: wrap; gap: 1rem;
+    }
+    .result-host h2 { font-size: 1.6rem; font-weight: 800; color: #fff; letter-spacing: -.02em; margin-bottom: .5rem; font-family: 'JetBrains Mono', monospace; }
+    .badge { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .9rem; border-radius: 20px; font-size: .85rem; font-weight: 700; }
+    .badge-valid   { background: rgba(34,197,94,.15);  color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+    .badge-invalid { background: rgba(239,68,68,.15);  color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
+    .badge-warn    { background: rgba(245,158,11,.15); color: var(--yellow); border: 1px solid rgba(245,158,11,.3); }
+    .badge-critical{ background: rgba(239,68,68,.15);  color: var(--red);    border: 1px solid rgba(239,68,68,.3); animation: pulse 1s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    .score-ring-wrap { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
+    .score-ring-wrap svg { position: absolute; top: 0; left: 0; }
+    .score-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .score-num { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .score-label { font-size: .75rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+    .card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 1.25rem 1.5rem; transition: border-color .2s; }
+    .card:hover { border-color: var(--accent); }
+    .card h3 { font-size: .95rem; font-weight: 700; color: var(--accent); margin-bottom: 1rem; }
+    .info-row { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; padding: .4rem 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: var(--muted); font-size: .8rem; font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+    .info-value { color: var(--text); font-size: .85rem; font-family: 'JetBrains Mono', monospace; text-align: right; word-break: break-all; }
+    .tags { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .4rem; }
+    .tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: .2rem .5rem; font-size: .75rem; font-family: 'JetBrains Mono', monospace; color: var(--accent2); }
+    .warning-banner { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 10px; padding: 1rem 1.25rem; color: var(--yellow); font-size: .9rem; }
+    .error-banner { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); border-radius: 10px; padding: 1rem 1.25rem; color: var(--red); font-size: .9rem; }
+    footer { text-align: center; color: var(--muted); font-size: .8rem; font-family: 'JetBrains Mono', monospace; padding: 1.5rem; border-top: 1px solid var(--border); position: relative; z-index: 1; }
+    @media (max-width: 600px) {
+      .search-form { flex-direction: column; }
+      .check-btn { padding: .9rem; }
+      .result-top { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="app">
+  <header>
+    <div class="logo">
+      <span class="logo-icon">🔐</span>
+      <span class="logo-text">SSL<span class="logo-accent">Check</span></span>
+    </div>
+    <p class="tagline">Instant SSL/TLS Certificate Inspector</p>
+  </header>
+
+  <main>
+    <form class="search-form" id="checkForm">
+      <div class="input-wrap">
+        <span class="input-prefix">https://</span>
+        <input class="url-input" id="urlInput" type="text" placeholder="example.com" autocomplete="off" />
+      </div>
+      <button class="check-btn" id="checkBtn" type="submit">Analyze</button>
+    </form>
+
+    <div id="errorBox" class="error-card" style="display:none"></div>
+    <div id="results" class="results" style="display:none"></div>
+  </main>
+
+  <footer>Built with Express + Node.js · SSL Inspector v1.0 · hemanathan115</footer>
+</div>
+
+<script>
+  const form = document.getElementById('checkForm');
+  const urlInput = document.getElementById('urlInput');
+  const checkBtn = document.getElementById('checkBtn');
+  const errorBox = document.getElementById('errorBox');
+  const resultsDiv = document.getElementById('results');
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function getScoreColor(score) {
+    return score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
+  }
+
+  function scoreRing(score) {
+    const r = 54, c = 2 * Math.PI * r;
+    const offset = c - (score / 100) * c;
+    const color = getScoreColor(score);
+    return `
+      <div class="score-ring-wrap">
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="${r}" stroke="#1e293b" stroke-width="10" fill="none"/>
+          <circle cx="65" cy="65" r="${r}" stroke="${color}" stroke-width="10" fill="none"
+            stroke-dasharray="${c}" stroke-dashoffset="${offset}"
+            stroke-linecap="round" transform="rotate(-90 65 65)"
+            style="transition:stroke-dashoffset 1s ease"/>
+        </svg>
+        <div class="score-text">
+          <span class="score-num" style="color:${color}">${score}</span>
+          <span class="score-label">/ 100</span>
+        </div>
+      </div>`;
+  }
+
+  function statusBadge(isValid, daysLeft) {
+    if (!isValid) return `<span class="badge badge-invalid">✕ Invalid</span>`;
+    if (daysLeft <= 7) return `<span class="badge badge-critical">⚠ Expiring in ${daysLeft}d</span>`;
+    if (daysLeft <= 30) return `<span class="badge badge-warn">⚠ Expiring in ${daysLeft}d</span>`;
+    return `<span class="badge badge-valid">✓ Valid</span>`;
+  }
+
+  function infoRow(label, value) {
+    return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value">${value}</span></div>`;
+  }
+
+  function renderResults(d) {
+    const altNames = (d.subjectAltNames || []).slice(0, 5).map(n => `<span class="tag">${n}</span>`).join('');
+    const extra = d.subjectAltNames.length > 5 ? `<span class="tag">+${d.subjectAltNames.length - 5} more</span>` : '';
+
+    let warning = '';
+    if (d.daysUntilExpiry <= 0) {
+      warning = `<div class="error-banner">✕ This certificate has <strong>expired</strong>. Visitors will see security warnings.</div>`;
+    } else if (d.daysUntilExpiry <= 30) {
+      warning = `<div class="warning-banner">⚠ Certificate expires in <strong>${d.daysUntilExpiry} days</strong>. Renew soon.</div>`;
+    }
+
+    resultsDiv.innerHTML = `
+      <div class="result-top">
+        <div class="result-host">
+          <h2>${d.hostname}</h2>
+          ${statusBadge(d.isValid, d.daysUntilExpiry)}
+        </div>
+        ${scoreRing(d.securityScore)}
+      </div>
+      <div class="cards-grid">
+        <div class="card">
+          <h3>🏢 Issuer</h3>
+          ${infoRow('Organization', d.issuer.O)}
+          ${infoRow('Common Name', d.issuer.CN)}
+          ${infoRow('Country', d.issuer.C)}
+        </div>
+        <div class="card">
+          <h3>📅 Validity</h3>
+          ${infoRow('Issued On', formatDate(d.validFrom))}
+          ${infoRow('Expires On', formatDate(d.validTo))}
+          ${infoRow('Days Left', d.daysUntilExpiry > 0 ? d.daysUntilExpiry + ' days' : 'Expired')}
+        </div>
+        <div class="card">
+          <h3>🔒 Encryption</h3>
+          ${infoRow('Protocol', d.protocol)}
+          ${infoRow('Cipher Suite', d.cipher)}
+          ${infoRow('Serial No.', d.serialNumber.slice(0, 16) + '...')}
+        </div>
+        <div class="card">
+          <h3>🌐 Subject</h3>
+          ${infoRow('Common Name', d.subject.CN)}
+          ${infoRow('Organization', d.subject.O)}
+          ${altNames ? `<div class="info-label" style="margin-top:.5rem">Alt Names</div><div class="tags">${altNames}${extra}</div>` : ''}
+        </div>
+      </div>
+      ${warning}
+    `;
+    resultsDiv.style.display = 'block';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = urlInput.value.trim();
+    if (!url) return;
+
+    checkBtn.innerHTML = '<span class="spinner"></span>';
+    checkBtn.disabled = true;
+    errorBox.style.display = 'none';
+    resultsDiv.style.display = 'none';
+
+    try {
+      const res = await fetch(`/api/check?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch');
+      renderResults(data);
+    } catch (err) {
+      errorBox.textContent = '⚠ ' + err.message;
+      errorBox.style.display = 'block';
+    } finally {
+      checkBtn.innerHTML = 'Analyze';
+      checkBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
